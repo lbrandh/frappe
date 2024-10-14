@@ -526,6 +526,22 @@ export default class ChartWidget extends Widget {
 		}
 	}
 
+	async get_correct_doctype_label() {
+		let document_type = await frappe.db
+			.get_value("Report", this.chart_doc.report_name, "ref_doctype")
+			.then((r) => r.message.ref_doctype);
+
+		let title_field_name = await frappe.db
+			.get_value("DocType", document_type, "title_field")
+			.then((r) => r.message.title_field || "name");
+
+		let newlabels = await Promise.all(this.data.labels.map((label) => frappe.db
+			.get_value(document_type,label, title_field_name)
+			.then((r) => r.message[title_field_name])));	
+			
+		return newlabels;
+	}
+
 	async render() {
 		let setup_dashboard_chart = () => {
 			const chart_args = this.get_chart_args();
@@ -547,6 +563,7 @@ export default class ChartWidget extends Widget {
 			this.empty.hide();
 			this.chart_wrapper.show();
 			this.chart_doc.document_type = await this.get_source_doctype();
+			this.data.labels = 	await this.get_correct_doctype_label();
 
 			if (this.chart_doc.document_type) {
 				frappe.model.with_doctype(this.chart_doc.document_type, setup_dashboard_chart);
