@@ -11,6 +11,7 @@ import frappe
 from frappe import _, cstr, get_module_path
 from frappe.core.doctype.access_log.access_log import make_access_log
 from frappe.core.doctype.document_share_key.document_share_key import is_expired
+from frappe.translate import print_language
 from frappe.utils import cint, escape_html, strip_html
 from frappe.utils.jinja_globals import is_rtl
 
@@ -76,15 +77,17 @@ def get_context(context) -> PrintContext:
 		doctype=frappe.form_dict.doctype, document=frappe.form_dict.name, file_type="PDF", method="Print"
 	)
 
-	body = get_rendered_template(
-		doc,
-		print_format=print_format,
-		meta=meta,
-		trigger_print=frappe.form_dict.trigger_print,
-		no_letterhead=frappe.form_dict.no_letterhead,
-		letterhead=letterhead,
-		settings=settings,
-	)
+	with print_language(frappe.form_dict._lang):
+		body = get_rendered_template(
+			doc,
+			print_format=print_format,
+			meta=meta,
+			trigger_print=frappe.form_dict.trigger_print,
+			no_letterhead=frappe.form_dict.no_letterhead,
+			letterhead=letterhead,
+			settings=settings,
+		)
+		layout_direction = "rtl" if is_rtl() else "ltr"
 	print_style = get_print_style(frappe.form_dict.style, print_format)
 
 	return {
@@ -92,8 +95,8 @@ def get_context(context) -> PrintContext:
 		"print_style": print_style,
 		"comment": frappe.session.user,
 		"title": frappe.utils.strip_html(cstr(doc.get_title() or doc.name)),
-		"lang": frappe.local.lang,
-		"layout_direction": "rtl" if is_rtl() else "ltr",
+		"lang": frappe.form_dict._lang,
+		"layout_direction": layout_direction,
 		"doctype": frappe.form_dict.doctype,
 		"name": frappe.form_dict.name,
 		"key": frappe.form_dict.get("key"),
@@ -332,15 +335,16 @@ def get_html_and_style(
 	set_link_titles(document)
 
 	try:
-		html = get_rendered_template(
-			doc=document,
-			print_format=print_format,
-			meta=document.meta,
-			no_letterhead=no_letterhead,
-			letterhead=letterhead,
-			trigger_print=trigger_print,
-			settings=frappe.parse_json(settings),
-		)
+		with print_language(frappe.form_dict._lang):
+			html = get_rendered_template(
+				doc=document,
+				print_format=print_format,
+				meta=document.meta,
+				no_letterhead=no_letterhead,
+				letterhead=letterhead,
+				trigger_print=trigger_print,
+				settings=frappe.parse_json(settings),
+			)
 	except frappe.TemplateNotFoundError:
 		frappe.clear_last_message()
 		html = None
@@ -365,10 +369,10 @@ def get_rendered_raw_commands(doc: str, name: str | None = None, print_format: s
 		frappe.throw(
 			_("{0} is not a raw printing format.").format(print_format), frappe.TemplateNotFoundError
 		)
-
-	return {
-		"raw_commands": get_rendered_template(doc=document, print_format=print_format, meta=document.meta)
-	}
+	with print_language(frappe.form_dict._lang):
+		return {
+			"raw_commands": get_rendered_template(doc=document, print_format=print_format, meta=document.meta)
+		}
 
 
 def validate_print_permission(doc: "Document") -> None:
